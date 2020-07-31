@@ -11,9 +11,14 @@
 
 (defonce app-state (r/atom {:world (vec (repeat height (vec (repeat width 0))))
                             :update? true :steps 0}))
-(swap! app-state update :world #(assoc-in % [2 4] 1))
-(swap! app-state update :world #(assoc-in % [2 5] 1))
-(swap! app-state update :world #(assoc-in % [3 4] 1))
+
+(swap! app-state update :world #(assoc-in % [20 24] 1))
+(swap! app-state update :world #(assoc-in % [20 25] 1))
+(swap! app-state update :world #(assoc-in % [20 26] 1))
+(swap! app-state update :world #(assoc-in % [20 27] 1))
+(swap! app-state update :world #(assoc-in % [20 28] 1))
+(swap! app-state update :world #(assoc-in % [20 29] 1))
+(swap! app-state update :world #(assoc-in % [20 30] 1))
 
 (println "The Game of Life")
 
@@ -78,7 +83,9 @@
   (vec (for [r (range height)]
          (vec (for [c (range width)]
                 (let [n (count-neighbors world r c)]
-                  (if (and (< 1 n) (< n 4)) 1 0)))))))
+                  (if (= 1 (get-in world [r c]))
+                    (if (and (< 1 n) (< n 4)) 1 0)   ; 1
+                    (if (= 3 n) 1 0))))))))          ; 0
 
 (defn update-state
   [state]

@@ -6,6 +6,8 @@
 
 Just for fun, experiment with the Game of Life, and try to understand the meaning of the Universe.
 
+![The Game of Life](/game-of-life.gif)
+
 ## Setup
 
 To get an interactive development environment run:

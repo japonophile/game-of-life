@@ -4,21 +4,35 @@
 
 (enable-console-print!)
 
+; constants
 (def width 100)
 (def height 50)
-(def d 10)
+(def d 10) ; cell size in pixels
 (def step-time-ms 500)
 
-(defonce app-state (r/atom {:world (vec (repeat height (vec (repeat width 0))))
-                            :update? true :steps 0}))
+(defn empty-world
+  []
+  (vec (repeat height (vec (repeat width 0)))))
 
-(swap! app-state update :world #(assoc-in % [20 24] 1))
-(swap! app-state update :world #(assoc-in % [20 25] 1))
-(swap! app-state update :world #(assoc-in % [20 26] 1))
-(swap! app-state update :world #(assoc-in % [20 27] 1))
-(swap! app-state update :world #(assoc-in % [20 28] 1))
-(swap! app-state update :world #(assoc-in % [20 29] 1))
-(swap! app-state update :world #(assoc-in % [20 30] 1))
+(defn initial-state
+  ([]
+   (initial-state true))
+  ([playing]
+   {:world (empty-world) :playing? playing :steps 0 :current-step 0 :history []}))
+
+(defonce app-state (r/atom (initial-state)))
+
+; reset state at every reload
+(reset! app-state (initial-state false))
+(swap! app-state update :world
+  #(-> %
+     (assoc-in [20 24] 1)
+     (assoc-in [20 25] 1)
+     (assoc-in [20 26] 1)
+     (assoc-in [20 27] 1)
+     (assoc-in [20 28] 1)
+     (assoc-in [20 29] 1)
+     (assoc-in [20 30] 1)))
 
 (println "The Game of Life")
 
@@ -44,19 +58,25 @@
 
 (defn single-step-update
   [state]
-  (-> state
-    (assoc :world (update-world (:world state)))
-    (assoc :steps (inc (:steps state)))))
+  (let [steps (inc (:steps state))]
+    (assoc state
+           :world (update-world (:world state))
+           :steps steps
+           :current-step steps
+           :history (conj (:history state) (:world state)))))
 
 (defn update-state
   [state]
-  (if (:update? state)
+  (if (:playing? state)
     (single-step-update state)
     state))
 
 (defn render-world
-  [world]
-  (let [canvas (.getElementById js/document "world")
+  []
+  (let [world (if (= (:current-step @app-state) (:steps @app-state))
+                (:world @app-state)
+                (get (:history @app-state) (:current-step @app-state)))
+        canvas (.getElementById js/document "world")
         ctx (.getContext canvas "2d")]
     (doall (for [r (range height)
                  c (range width)]
@@ -72,15 +92,35 @@
   [r c]
   (swap! app-state update-in [:world r c] #(- 1 %)))
 
-(defn handle-click-event
+(defn toggle-cell-action
   [e]
   (let [rect (-> e .-target .getBoundingClientRect)
         t (-> rect .-top)
         l (-> rect .-left)
         r (/ (- (-> e .-clientY) t) d)
-        c (/ (- (-> e .-clientX) l) d)
-        _ (prn rect t l r c)]
+        c (/ (- (-> e .-clientX) l) d)]
     (toggle-cell r c)))
+
+(defn reset-action
+  [_]
+  (reset! app-state (initial-state false)))
+
+(defn pause-action
+  [_]
+  (swap! app-state assoc :playing? false))
+
+(defn play-action
+  [_]
+  (swap! app-state #(assoc % :current-step (:steps %) :playing? true)))
+
+(defn step-action
+  [_]
+  (swap! app-state #(assoc % :current-step (:steps %)))
+  (swap! app-state single-step-update))
+
+(defn slider-action
+  [e]
+  (swap! app-state assoc :current-step (js/parseInt (-> e .-target .-value) 10)))
 
 (defn world-component
   []
@@ -88,17 +128,17 @@
     {
      :component-did-update
      (fn [_]
-       (render-world (:world @app-state)))
+       (render-world))
      :component-did-mount
      (fn [_]
-       (render-world (:world @app-state)))
+       (render-world))
      :reagent-render
      (fn []
        (:world @app-state)
        [:div {:style {:width "100%"}}
         [:canvas {:id "world" :width (str (* d width)) :height (str (* d height))
                   :style {:margin "auto" :border "1px solid black"}
-                  :on-click handle-click-event}]])}))
+                  :on-click toggle-cell-action}]])}))
 
 (defn app-component
   []
@@ -106,16 +146,25 @@
    [:h1 "The Game of Life"]
    [world-component]
    [:div
-    [:span "Auto-update: "]
-    [:label.switch
-     [:input {:type "checkbox" :checked (:update? @app-state)
-              :on-change (fn [e] (swap! app-state assoc :update? (-> e .-target .-checked)))}]
-     [:span.slider.round]]
-    [:span {:style {:display "inline-block" :width "40px"}} " "]
-    [:button.btn {:on-click #(swap! app-state single-step-update)} [:i.fa.fa-step-forward]]]
-   [:p (str "Step: " (:steps @app-state))]])
+    [:button.btn {:disabled (:playing? @app-state)
+                  :on-click reset-action} [:i.fa.fa-trash]]
+    [:span " "]
+    [:button.btn {:disabled (not (:playing? @app-state))
+                  :on-click pause-action} [:i.fa.fa-pause]]
+    [:span " "]
+    [:button.btn {:disabled (:playing? @app-state)
+                  :on-click play-action} [:i.fa.fa-play]]
+    [:span " "]
+    [:button.btn {:disabled (:playing? @app-state)
+                  :on-click step-action} [:i.fa.fa-step-forward]]]
+   [:p (str "Step: " (:current-step @app-state) " / " (:steps @app-state))]
+   [:div.slidercontainer {:style {:width (str (* d width) "px")}}
+    [:input.slider {:disabled (:playing? @app-state)
+                    :type "range" :min "0" :max (str (:steps @app-state))
+                    :value (str (:current-step @app-state))
+                    :on-change slider-action}]]])
 
 (rd/render [app-component]
            (. js/document (getElementById "app")))
 
-(js/setInterval #(swap! app-state update-state) step-time-ms)
+(defonce timer (js/setInterval #(swap! app-state update-state) step-time-ms))

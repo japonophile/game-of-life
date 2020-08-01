@@ -8,7 +8,16 @@ Just for fun, experiment with Conway's Game of Life, and try to understand the m
 
 ![Conway's Game of Life](/game-of-life.gif)
 
-## Setup
+See a **live demo** [here](https://japonophile.github.io/game-of-life/).
+
+Note about the starting pattern in the demo.  According to [LifeWiki](https://www.conwaylife.com/w/index.php?title=Block-laying_switch_engine), the pattern should create a single block-laying switch engine: a configuration that leaves behind two-by-two still life blocks as its translates itself across the game's universe.  However, since this simulation environment is finite (really?) the simulation kind of stops after a few hundred steps.
+
+## How to Use
+
+You can create your own initial configuration by clicking on the canvas to toggle cells on or off, then press the "play" button and see what happens.
+You can pause the simulation and go back in time to check what happened.
+
+## Development environment setup
 
 To get an interactive development environment run:
 

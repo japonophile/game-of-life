@@ -1,4 +1,4 @@
-/resources/public/js/compiled/**
+#/resources/public/js/compiled/**
 figwheel_server.log
 pom.xml
 *jar
@@ -13,3 +13,4 @@ pom.xml
 .nrepl-port
 .rebel_readline_history
 node_modules/
+game-of-life.mov

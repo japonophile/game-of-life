@@ -23,18 +23,21 @@
 (defonce app-state (r/atom (initial-state)))
 
 ; reset state at every reload
-(reset! app-state (initial-state false))
+(reset! app-state (initial-state))
 (swap! app-state update :world
   #(-> %
-     (assoc-in [20 24] 1)
-     (assoc-in [20 25] 1)
-     (assoc-in [20 26] 1)
-     (assoc-in [20 27] 1)
-     (assoc-in [20 28] 1)
-     (assoc-in [20 29] 1)
-     (assoc-in [20 30] 1)))
+     (assoc-in [27 47] 1)
+     (assoc-in [27 49] 1)
+     (assoc-in [26 49] 1)
+     (assoc-in [25 51] 1)
+     (assoc-in [24 51] 1)
+     (assoc-in [23 51] 1)
+     (assoc-in [24 53] 1)
+     (assoc-in [23 53] 1)
+     (assoc-in [22 53] 1)
+     (assoc-in [23 54] 1)))
 
-(println "The Game of Life")
+(println "Conway's Game of Life")
 
 (defn count-neighbors
   [world r c]

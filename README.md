@@ -1,12 +1,12 @@
-# The Game of Life...
+# The Game of Life
 
-...written in Clojurescript
+Clojurescript implementation of [Conway's Game of Life](https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life).
 
 ## Overview
 
-Just for fun, experiment with the Game of Life, and try to understand the meaning of the Universe.
+Just for fun, experiment with Conway's Game of Life, and try to understand the meaning of the Universe.
 
-![The Game of Life](/game-of-life.gif)
+![Conway's Game of Life](/game-of-life.gif)
 
 ## Setup
 

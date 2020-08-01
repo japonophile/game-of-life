@@ -1,0 +1,21 @@
+/* Style buttons */
+.btn {
+  background-color: #2196F3; /* Blue background */
+  border: none; /* Remove borders */
+  color: white; /* White text */
+  padding: 12px 16px; /* Some padding */
+  font-size: 16px; /* Set a font size */
+  cursor: pointer; /* Mouse pointer on hover */
+}
+
+.btn:disabled {
+  background-color: #ccc;
+}
+
+.btn:hover:not([disabled]) {
+  background-color: #279CF9;
+}
+
+.slider {
+  width: 100%;
+}

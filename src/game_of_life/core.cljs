@@ -5,10 +5,16 @@
 (enable-console-print!)
 
 ; constants
-(def width 100)
-(def height 50)
-(def d 10) ; cell size in pixels
-(def step-time-ms 500)
+(def width 200)
+(def height 200)
+(def d 3) ; cell size in pixels
+(def default-step-time-ms 500)
+
+; patterns
+(def block-laying-switch-engine-pattern
+  [[5 0] [5 2] [4 2] [3 4] [2 4] [1 4] [2 6] [1 6] [0 6] [1 7]])
+
+(def starting-pattern block-laying-switch-engine-pattern)
 
 (defn empty-world
   []
@@ -18,26 +24,32 @@
   ([]
    (initial-state true))
   ([playing]
-   {:world (empty-world) :playing? playing :steps 0 :current-step 0 :history []}))
+   {:world (empty-world)
+    :playing? playing
+    :step-time-ms default-step-time-ms
+    :play-timer nil
+    :steps 0
+    :current-step 0
+    :history []}))
 
 (defonce app-state (r/atom (initial-state)))
 
-; reset state at every reload
-(reset! app-state (initial-state))
-(swap! app-state update :world
-  #(-> %
-     (assoc-in [27 47] 1)
-     (assoc-in [27 49] 1)
-     (assoc-in [26 49] 1)
-     (assoc-in [25 51] 1)
-     (assoc-in [24 51] 1)
-     (assoc-in [23 51] 1)
-     (assoc-in [24 53] 1)
-     (assoc-in [23 53] 1)
-     (assoc-in [22 53] 1)
-     (assoc-in [23 54] 1)))
-
-(println "Conway's Game of Life")
+(defn initialize-pattern
+  ([world pattern]
+   ; center pattern in world
+   (let [[h w] [(count world) (count (first world))]
+         [rs cs] (split-at (count pattern) (apply interleave pattern))
+         ph (- (apply max rs) (apply min rs))
+         pw (- (apply max cs) (apply min cs))
+         _  (assert (and (<= ph h) (<= pw h)))
+         top  (int (/ (- h ph) 2))
+         left (int (/ (- w pw) 2))]
+     (initialize-pattern world pattern top left)))
+  ([world pattern top left]
+   (reduce (fn [w [r c]]
+             (assoc-in w [(+ r top) (+ c left)] 1))
+           world
+           pattern)))
 
 (defn count-neighbors
   [world r c]
@@ -71,7 +83,7 @@
 (defn update-state
   [state]
   (if (:playing? state)
-    (single-step-update state)
+    (time (single-step-update state))
     state))
 
 (defn render-world
@@ -90,6 +102,24 @@
                (.beginPath ctx)
                (.rect ctx (* d c) (* d r) d d)
                (.fill ctx))))))
+
+(defn stop-timer!
+  []
+  (swap! app-state
+    #(let [timer (:timer %)]
+       (if (nil? timer)
+         %
+         (do
+           (.clearInterval js/window timer)
+           (assoc % :timer nil))))))
+
+(defn restart-timer!
+  []
+  (stop-timer!)
+  (swap! app-state
+    (fn [state]
+      (let [step-time-ms (:step-time-ms state)]
+        (assoc state :timer (js/setInterval #(swap! app-state update-state) step-time-ms))))))
 
 (defn toggle-cell
   [r c]
@@ -119,7 +149,12 @@
 (defn step-action
   [_]
   (swap! app-state #(assoc % :current-step (:steps %)))
-  (swap! app-state single-step-update))
+  (time (swap! app-state single-step-update)))
+
+(defn change-speed-action
+  [e]
+  (swap! app-state assoc :step-time-ms (int (/ 1000 (js/parseInt (-> e .-target .-value) 10))))
+  (restart-timer!))
 
 (defn slider-action
   [e]
@@ -159,7 +194,13 @@
                   :on-click play-action} [:i.fa.fa-play]]
     [:span " "]
     [:button.btn {:disabled (:playing? @app-state)
-                  :on-click step-action} [:i.fa.fa-step-forward]]]
+                  :on-click step-action} [:i.fa.fa-step-forward]]
+    [:span " "]
+    [:div {:style {:display "inline-block"}}
+     [:input.slider {:type "range" :min "1" :max "10"
+                     :value (str (int (/ 1000 (:step-time-ms @app-state))))
+                     :on-change change-speed-action}]]
+    [:span (str " " (:step-time-ms @app-state) " ms")]]
    [:p (str "Step: " (:current-step @app-state) " / " (:steps @app-state))]
    [:div.slidercontainer {:style {:width (str (* d width) "px")}}
     [:input.slider {:disabled (:playing? @app-state)
@@ -167,7 +208,15 @@
                     :value (str (:current-step @app-state))
                     :on-change slider-action}]]])
 
+; reset state at every reload
+
+(stop-timer!)
+(reset! app-state (initial-state))
+(swap! app-state
+       #(assoc % :world (initialize-pattern (:world %) starting-pattern)))
+(restart-timer!)
+
+(println "Conway's Game of Life")
+
 (rd/render [app-component]
            (. js/document (getElementById "app")))
-
-(defonce timer (js/setInterval #(swap! app-state update-state) step-time-ms))

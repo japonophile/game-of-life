@@ -16,7 +16,7 @@ typedef int BOOL;
 
 /* logging */
 
-#define ENABLE_LOGGING 0
+#define ENABLE_LOGGING 1
 
 #if ENABLE_LOGGING
 #define LOG(args) printf("%s:%d - ", __FILE__, __LINE__); printf args
@@ -29,6 +29,13 @@ typedef int BOOL;
 
 #define MAX_BOARD_WIDTH 1024
 #define MAX_BOARD_HEIGHT 1024
+
+typedef enum {
+    C_BLANK,
+    C_FRAME,
+    C_BLACK,
+    NUM_C
+} ScreenChar;
 
 
 /* domain types */
@@ -167,21 +174,31 @@ Config parse_config(int argc, char **argv)
 }
 
 
+uint get_row_buf_size(uint bd_width, uint elem_bits)
+{
+    uint row_num_bits, row_buf_size;
+
+    row_num_bits = bd_width * elem_bits;
+    row_buf_size = row_num_bits / (8 * sizeof(uint));
+    if (row_num_bits % (8 * sizeof(uint)) > 0) {
+        row_buf_size += 1;
+    }
+
+    return row_buf_size;
+}
+
+
 Board bd_create(Size2D bd_size, size_t elem_bits)
 {
     Board bd;
-    uint num_bits;
-    uint buf_size;
+    uint row_buf_size, buf_size;
 
     assert(bd_size.width < MAX_BOARD_WIDTH && bd_size.height < MAX_BOARD_HEIGHT);
 
     bd.size = bd_size;
     LOG(("board size is %ux%u\n", bd_size.width, bd_size.height));
-    num_bits = bd_size.width * bd_size.height * elem_bits;
-    buf_size = num_bits / (8 * sizeof(uint));
-    if (num_bits % (8 * sizeof(uint)) > 0) {
-        buf_size += 1;
-    }
+    row_buf_size = get_row_buf_size(bd_size.width, elem_bits);
+    buf_size = row_buf_size * bd_size.height;
     LOG(("allocating cells buffer of size %u\n", buf_size));
     bd.cells = calloc(buf_size, sizeof(uint));
 
@@ -189,14 +206,29 @@ Board bd_create(Size2D bd_size, size_t elem_bits)
 }
 
 
+void init_world(State *s)
+{
+    uint w, h, row_buf_size;
+    uint *wd = (uint*) s->world.cells;
+
+    w = s->world.size.width;
+    h = s->world.size.height;
+    row_buf_size = get_row_buf_size(w, 1);
+
+    wd[(h / 2 - 1) * row_buf_size] = 2 << (w / 2 - 1);
+    wd[(h / 2) * row_buf_size] = 7 << (w / 2 - 1);
+    wd[(h / 2 + 1) * row_buf_size] = 1 << (w / 2 - 1);
+}
+
+
 void init_display_areas(State *s)
 {
     uint header_height = 3;
-    if (s->world.size.width <= s->screen.size.width - 2) {
+    if (s->world.size.width * 2 <= s->screen.size.width - 2) {
         s->visible_world.left = 0;
-        s->visible_world.right = s->world.size.width;
-        s->display_area.left = (s->screen.size.width - s->world.size.width) / 2 + 1;
-        s->display_area.right = s->display_area.left + s->world.size.width + 1;
+        s->visible_world.right = s->world.size.width * 2;
+        s->display_area.left = (s->screen.size.width - s->world.size.width * 2) / 2 + 1;
+        s->display_area.right = s->display_area.left + s->world.size.width * 2;
     }
     else {
         s->visible_world.left = 0;
@@ -207,8 +239,8 @@ void init_display_areas(State *s)
     if (s->world.size.height <= s->screen.size.height - 2 - header_height) {
         s->visible_world.top = 0;
         s->visible_world.bottom = s->world.size.height;
-        s->display_area.top = (s->screen.size.height - s->world.size.height) / 2 + 1 + header_height;
-        s->display_area.bottom = s->display_area.top + s->world.size.height + 1;
+        s->display_area.top = (s->screen.size.height - s->world.size.height - header_height) / 2 + header_height;
+        s->display_area.bottom = s->display_area.top + s->world.size.height;
     }
     else {
         s->visible_world.top = 0;
@@ -221,8 +253,10 @@ void init_display_areas(State *s)
 
 void update_screen(State *s)
 {
-    uint i, j, t, l, b, r, w, h;
+    uint i, j, m, n, t, l, b, r, w, h, x, y, o;
+    uint row_buf_size;
     char *sc = (char*) s->screen.cells;
+    uint *wd = (uint*) s->world.cells;
 
     t = s->display_area.top;
     l = s->display_area.left;
@@ -230,24 +264,45 @@ void update_screen(State *s)
     r = s->display_area.right;
     w = s->screen.size.width;
     h = s->screen.size.height;
+    x = s->visible_world.left;
+    y = s->visible_world.top;
+    row_buf_size = get_row_buf_size(s->world.size.width, 1);
 
     /* fill screen with spaces */
     for (i = 0; i < h; i++) {
         for (j = 0; j < w; j ++) {
-            sc[i * w + j] = ' ';
+            sc[i * w + j] = C_BLANK;
         }
     }
 
+    /* draw header */
+    for (j = 0; j < w; j++) {
+        sc[j] = C_FRAME;
+        sc[2 * w + j] = C_FRAME;
+    }
+
     /* draw frame */
-    for (i = t, j = l; j <= r; j++) {
-        sc[i * w + j] = '*';
+    for (i = t - 1, j = l - 1; j <= r; j++) {
+        sc[i * w + j] = C_FRAME;
     }
     for (++i; i < b; i++) {
-        sc[i * w + l] = '*';
-        sc[i * w + r] = '*';
+        sc[i * w + l - 1] = C_FRAME;
+        sc[i * w + r] = C_FRAME;
     }
-    for (j = l; j <= r; j++) {
-        sc[i * w + j] = '*';
+    for (j = l - 1; j <= r; j++) {
+        sc[i * w + j] = C_FRAME;
+    }
+
+    /* draw world */
+    LOG(("row_buf_size = %u\n", row_buf_size));
+    for (i = t, m = y; i < b; i++, m++) {
+        for (j = l, n = x; j < r; j += 2, n++) {
+            o = m * row_buf_size + n / (sizeof(uint) * 8);
+            if ((wd[o] >> (n % (sizeof(uint) * 8))) & 0x1) {
+                sc[i * w + j] = C_BLACK;
+                sc[i * w + j + 1] = C_BLACK;
+            }
+        }
     }
 }
 
@@ -255,6 +310,7 @@ void update_screen(State *s)
 void render_screen(Board screen)
 {
     uint i, j, w, h;
+    char c;
     char *sc = (char*) screen.cells;
 
     w = screen.size.width;
@@ -262,9 +318,18 @@ void render_screen(Board screen)
 
     LOG(("render_screen\n"));
 
-    for (i = 0; i < h; i++) {
+    for (i = 0; i < h - 1; i++) {
         for (j = 0; j < w; j ++) {
-            printf("%c", sc[i * w + j]);
+            c = sc[i * w + j];
+            if (c == C_FRAME) {
+                printf("\u2591");
+            }
+            else if (c == C_BLACK) {
+                printf("\u2588");
+            }
+            else if (c == C_BLANK) {
+                printf(" ");
+            }
         }
     }
 }
@@ -290,6 +355,7 @@ void main_loop(State s)
     uint frame_delay = 50;  /* msec */
     s.running = TRUE;
 
+    init_world(&s);
     init_display_areas(&s);
 
     while (s.running) {

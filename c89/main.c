@@ -1,9 +1,10 @@
-#include "assert.h"
-#include "stdio.h"
-#include "stdlib.h"
-#include "sys/ioctl.h"
-#include "termios.h"
-#include "unistd.h"
+#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/ioctl.h>
+#include <termios.h>
+#include <unistd.h>
 
 
 /* basic types */
@@ -16,7 +17,7 @@ typedef int BOOL;
 
 /* logging */
 
-#define ENABLE_LOGGING 1
+#define ENABLE_LOGGING 0
 
 #if ENABLE_LOGGING
 #define LOG(args) printf("%s:%d - ", __FILE__, __LINE__); printf args
@@ -26,6 +27,8 @@ typedef int BOOL;
 
 
 /* constants */
+
+#define BITS_PER_UINT (sizeof(uint) * 8)
 
 #define MAX_BOARD_WIDTH 1024
 #define MAX_BOARD_HEIGHT 1024
@@ -174,13 +177,15 @@ Config parse_config(int argc, char **argv)
 }
 
 
-uint get_row_buf_size(uint bd_width, uint elem_bits)
+uint get_row_buf_size(uint width, uint elem_bits)
+/* Computes the buffer size, that is number of uints needed to
+ * store a row of `width` elements of `elem_bits` bits. */
 {
     uint row_num_bits, row_buf_size;
 
-    row_num_bits = bd_width * elem_bits;
-    row_buf_size = row_num_bits / (8 * sizeof(uint));
-    if (row_num_bits % (8 * sizeof(uint)) > 0) {
+    row_num_bits = width * elem_bits;
+    row_buf_size = row_num_bits / BITS_PER_UINT;
+    if (row_num_bits % BITS_PER_UINT > 0) {
         row_buf_size += 1;
     }
 
@@ -251,8 +256,20 @@ void init_display_areas(State *s)
 }
 
 
+void show_cursor(BOOL show)
+{
+    if (show == TRUE) {
+        printf("\33[?25h");
+    }
+    else {
+        printf("\33[?25l");
+    }
+}
+
+
 void update_screen(State *s)
 {
+    char *title = "THE GAME OF LIFE";
     uint i, j, m, n, t, l, b, r, w, h, x, y, o;
     uint row_buf_size;
     char *sc = (char*) s->screen.cells;
@@ -280,6 +297,9 @@ void update_screen(State *s)
         sc[j] = C_FRAME;
         sc[2 * w + j] = C_FRAME;
     }
+    if (strlen(title) < w) {
+        sprintf(&sc[1 * w + (w - strlen(title)) / 2], "%s", title);
+    }
 
     /* draw frame */
     for (i = t - 1, j = l - 1; j <= r; j++) {
@@ -297,8 +317,8 @@ void update_screen(State *s)
     LOG(("row_buf_size = %u\n", row_buf_size));
     for (i = t, m = y; i < b; i++, m++) {
         for (j = l, n = x; j < r; j += 2, n++) {
-            o = m * row_buf_size + n / (sizeof(uint) * 8);
-            if ((wd[o] >> (n % (sizeof(uint) * 8))) & 0x1) {
+            o = m * row_buf_size + n / BITS_PER_UINT;
+            if ((wd[o] >> (n % BITS_PER_UINT)) & 0x1) {
                 sc[i * w + j] = C_BLACK;
                 sc[i * w + j + 1] = C_BLACK;
             }
@@ -318,7 +338,7 @@ void render_screen(Board screen)
 
     LOG(("render_screen\n"));
 
-    for (i = 0; i < h - 1; i++) {
+    for (i = 0; i < h; i++) {
         for (j = 0; j < w; j ++) {
             c = sc[i * w + j];
             if (c == C_FRAME) {
@@ -330,7 +350,13 @@ void render_screen(Board screen)
             else if (c == C_BLANK) {
                 printf(" ");
             }
+            else {
+                printf("%c", c);
+            }
         }
+    }
+    for (i = 0; i < h; i++) {
+        printf("\33[F");
     }
 }
 
@@ -361,7 +387,6 @@ void main_loop(State s)
     while (s.running) {
         update_screen(&s);
         render_screen(s.screen);
-        exit(0);
         handle_events(&s);
         /* TODO compute frame_delay each frame to ensure same FPS */
         usleep(frame_delay * 1000);
@@ -382,12 +407,14 @@ int main(int argc, char **argv)
     s.world = bd_create(s.cfg.bd_size, 1);
     s.screen = bd_create(s.cfg.term_size, 8);
 
-    /*io_init();*/
+    io_init();
+    show_cursor(FALSE);
 
     printf("  press 'q' to exit\n");
     main_loop(s);
 
-    /*io_tear_down();*/
+    io_tear_down();
+    show_cursor(TRUE);
 
     return 0;
 }

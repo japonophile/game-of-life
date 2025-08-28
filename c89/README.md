@@ -6,7 +6,7 @@ C89 implementation of [Conway's Game of Life](https://en.wikipedia.org/wiki/Conw
 
 Just for fun, experiment with Conway's Game of Life, and try to understand the meaning of the Universe.
 
-![Conway's Game of Life](/game-of-life.gif)
+![Conway's Game of Life](game-of-life.gif)
 
 See a **live demo** [here](https://japonophile.github.io/game-of-life/). This is a link to the Clojurescript demo.
 

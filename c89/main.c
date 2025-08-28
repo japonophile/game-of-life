@@ -68,6 +68,7 @@ typedef struct {
 typedef struct {
     Config cfg;
     Board world;
+    Board updated_world;
     Board screen;
     Rect2D visible_world;
     Rect2D display_area;
@@ -361,6 +362,80 @@ void render_screen(Board screen)
 }
 
 
+uint get_neighbors(uint *wd, uint i, uint j, uint w, uint h) {
+    uint n = 0, o;
+    uint row_buf_size = get_row_buf_size(w, 1);
+
+    if (i > 0) {
+        if (j > 0) {
+            o = (i - 1) * row_buf_size + (j - 1) / BITS_PER_UINT;
+            n += (wd[o] >> ((j - 1) % BITS_PER_UINT)) & 0x1;
+        }
+        o = (i - 1) * row_buf_size + j / BITS_PER_UINT;
+        n += (wd[o] >> (j % BITS_PER_UINT)) & 0x1;
+        if (j < w) {
+            o = (i - 1) * row_buf_size + (j + 1) / BITS_PER_UINT;
+            n += (wd[o] >> ((j + 1) % BITS_PER_UINT)) & 0x1;
+        }
+    }
+    if (j > 0) {
+        o = i * row_buf_size + (j - 1) / BITS_PER_UINT;
+        n += (wd[o] >> ((j - 1) % BITS_PER_UINT)) & 0x1;
+    }
+    if (j < w) {
+        o = i * row_buf_size + (j + 1) / BITS_PER_UINT;
+        n += (wd[o] >> ((j + 1) % BITS_PER_UINT)) & 0x1;
+    }
+    if (i < h) {
+        if (j > 0) {
+            o = (i + 1) * row_buf_size + (j - 1) / BITS_PER_UINT;
+            n += (wd[o] >> ((j - 1) % BITS_PER_UINT)) & 0x1;
+        }
+        o = (i + 1) * row_buf_size + j / BITS_PER_UINT;
+        n += (wd[o] >> (j % BITS_PER_UINT)) & 0x1;
+        if (j < w) {
+            o = (i + 1) * row_buf_size + (j + 1) / BITS_PER_UINT;
+            n += (wd[o] >> ((j + 1) % BITS_PER_UINT)) & 0x1;
+        }
+    }
+
+    LOG(("n(%u,%u)=%u\n", i, j, n));
+    return n;
+}
+
+
+void update_world(State *s)
+{
+    uint i, j, w, h, o, n;
+    uint row_buf_size;
+    uint *wd = (uint*) s->world.cells;
+    uint *uw = (uint*) s->updated_world.cells;
+
+    w = s->world.size.width;
+    h = s->world.size.height;
+    row_buf_size = get_row_buf_size(w, 1);
+
+    memcpy(uw, wd, row_buf_size * h * sizeof(uint));
+
+    for (i = 0; i < h; i++) {
+        for (j = 0; j < w; j++) {
+            n = get_neighbors(wd, i, j, w, h);
+            o = i * row_buf_size + j / BITS_PER_UINT;
+            if (n < 2 || n > 3) {
+                uw[o] &= ~(0x1 << (j % BITS_PER_UINT));
+                LOG(("n(%u,%u)->0\n", i, j));
+            }
+            else if (n == 3) {
+                uw[o] |= (0x1 << (j % BITS_PER_UINT));
+                LOG(("n(%u,%u)->1\n", i, j));
+            }
+        }
+    }
+
+    memcpy(wd, uw, row_buf_size * h * sizeof(uint));
+}
+
+
 void handle_events(State *s)
 {
     char key;
@@ -387,6 +462,7 @@ void main_loop(State s)
     while (s.running) {
         update_screen(&s);
         render_screen(s.screen);
+        update_world(&s);
         handle_events(&s);
         /* TODO compute frame_delay each frame to ensure same FPS */
         usleep(frame_delay * 1000);
@@ -405,6 +481,7 @@ int main(int argc, char **argv)
 
     printf("Welcome to the Game of Life!\n");
     s.world = bd_create(s.cfg.bd_size, 1);
+    s.updated_world = bd_create(s.cfg.bd_size, 1);
     s.screen = bd_create(s.cfg.term_size, 8);
 
     io_init();

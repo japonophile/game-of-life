@@ -230,29 +230,36 @@ void init_world(State *s)
 void init_display_areas(State *s)
 {
     uint header_height = 3;
-    if (s->world.size.width * 2 <= s->screen.size.width - 2) {
+    uint ww, wh, sw, sh;
+
+    ww = s->world.size.width;
+    wh = s->world.size.height;
+    sw = s->screen.size.width;
+    sh = s->screen.size.height;
+
+    if (ww * 2 <= sw - 2) {
         s->visible_world.left = 0;
-        s->visible_world.right = s->world.size.width * 2;
-        s->display_area.left = (s->screen.size.width - s->world.size.width * 2) / 2 + 1;
-        s->display_area.right = s->display_area.left + s->world.size.width * 2;
+        s->visible_world.right = ww * 2;
+        s->display_area.left = (sw - ww * 2) / 2 + 1;
+        s->display_area.right = s->display_area.left + ww * 2;
     }
     else {
         s->visible_world.left = 0;
-        s->visible_world.right = s->screen.size.width - 2;
+        s->visible_world.right = sw - 2;
         s->display_area.left = 1;
-        s->display_area.right = s->screen.size.width - 1;
+        s->display_area.right = sw - 1;
     }
-    if (s->world.size.height <= s->screen.size.height - 2 - header_height) {
+    if (wh <= sh - 2 - header_height) {
         s->visible_world.top = 0;
-        s->visible_world.bottom = s->world.size.height;
-        s->display_area.top = (s->screen.size.height - s->world.size.height - header_height) / 2 + header_height;
-        s->display_area.bottom = s->display_area.top + s->world.size.height;
+        s->visible_world.bottom = wh;
+        s->display_area.top = (sh - wh - header_height) / 2 + header_height;
+        s->display_area.bottom = s->display_area.top + wh;
     }
     else {
         s->visible_world.top = 0;
-        s->visible_world.bottom = s->screen.size.height - 2 - header_height;
+        s->visible_world.bottom = sh - 2 - header_height;
         s->display_area.top = header_height + 1;
-        s->display_area.bottom = s->screen.size.height - 1;
+        s->display_area.bottom = sh - 1;
     }
 }
 
@@ -270,7 +277,8 @@ void show_cursor(BOOL show)
 
 void update_screen(State *s)
 {
-    char *title = "THE GAME OF LIFE";
+    char *title = "CONWAY'S GAME OF LIFE";
+    char *footer = "q: quit";
     uint i, j, m, n, t, l, b, r, w, h, x, y, o;
     uint row_buf_size;
     char *sc = (char*) s->screen.cells;
@@ -324,6 +332,11 @@ void update_screen(State *s)
                 sc[i * w + j + 1] = C_BLACK;
             }
         }
+    }
+
+    /* draw footer */
+    if (strlen(footer) < w) {
+        sprintf(&sc[(h - 1) * w + w - strlen(footer)], "%s", footer);
     }
 }
 
@@ -452,7 +465,6 @@ void handle_events(State *s)
 
 void main_loop(State s)
 {
-    /* uint i = 0; */
     uint frame_delay = 50;  /* msec */
     s.running = TRUE;
 
@@ -466,10 +478,6 @@ void main_loop(State s)
         handle_events(&s);
         /* TODO compute frame_delay each frame to ensure same FPS */
         usleep(frame_delay * 1000);
-        /* i += 1;
-           if (i > 50) {
-               s.running = FALSE;
-           } */
     }
 }
 
@@ -479,7 +487,6 @@ int main(int argc, char **argv)
     State s;
     s.cfg = parse_config(argc, argv);
 
-    printf("Welcome to the Game of Life!\n");
     s.world = bd_create(s.cfg.bd_size, 1);
     s.updated_world = bd_create(s.cfg.bd_size, 1);
     s.screen = bd_create(s.cfg.term_size, 8);
@@ -487,7 +494,6 @@ int main(int argc, char **argv)
     io_init();
     show_cursor(FALSE);
 
-    printf("  press 'q' to exit\n");
     main_loop(s);
 
     io_tear_down();

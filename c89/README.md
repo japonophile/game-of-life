@@ -8,7 +8,7 @@ Just for fun, experiment with Conway's Game of Life, and try to understand the m
 
 ![Conway's Game of Life](/game-of-life.gif)
 
-See a **live demo** [here](https://japonophile.github.io/game-of-life/). This is a link to the Clojurescript demo (TODO: add capture of the C89 demo)
+See a **live demo** [here](https://japonophile.github.io/game-of-life/). This is a link to the Clojurescript demo.
 
 ## Why C89?
 
@@ -19,7 +19,7 @@ I saw Eskil Steenberg's talk at [BSC](https://bettersoftwareconference.com/) ["Y
 Build the program and run it on the command line, by specifying the grid size.
 ```
 make
-./gol 20 20
+./gol 30 30
 ```
 
 ## Development environment setup
@@ -28,6 +28,6 @@ You need make and a C89 compiler, which should exist in almost any environment. 
 
 ## License
 
-Copyright © 2020-2025 Antoine Choppin
+Copyright © 2025 Antoine Choppin
 
 Distributed under the Eclipse Public License either version 2.0 or (at your option) any later version.

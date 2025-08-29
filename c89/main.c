@@ -237,15 +237,15 @@ void init_display_areas(State *s)
     sw = s->screen.size.width;
     sh = s->screen.size.height;
 
-    if (ww * 2 <= sw - 2) {
+    if (ww <= (sw - 2) / 2) {
         s->visible_world.left = 0;
-        s->visible_world.right = ww * 2;
+        s->visible_world.right = ww;
         s->display_area.left = (sw - ww * 2) / 2 + 1;
         s->display_area.right = s->display_area.left + ww * 2;
     }
     else {
-        s->visible_world.left = 0;
-        s->visible_world.right = sw - 2;
+        s->visible_world.left = (ww - (sw - 2) / 2) / 2;
+        s->visible_world.right = s->visible_world.left + (sw - 2) / 2;
         s->display_area.left = 1;
         s->display_area.right = sw - 1;
     }
@@ -256,11 +256,29 @@ void init_display_areas(State *s)
         s->display_area.bottom = s->display_area.top + wh;
     }
     else {
-        s->visible_world.top = 0;
-        s->visible_world.bottom = sh - 2 - header_height;
+        s->visible_world.top = (wh - (sh - 2 - header_height)) / 2;
+        s->visible_world.bottom = s->visible_world.top + sh - 2 - header_height;
         s->display_area.top = header_height + 1;
         s->display_area.bottom = sh - 1;
     }
+    LOG(("visible_world: (%u,%u,%u,%u)\n", s->visible_world.left, s->visible_world.right, s->visible_world.top, s->visible_world.bottom));
+    LOG(("display_area: (%u,%u,%u,%u)\n", s->display_area.left, s->display_area.right, s->display_area.top, s->display_area.bottom));
+}
+
+
+void scroll_screen(State *s, int diff_x, int diff_y) {
+    LOG(("diff_x=%d, diff_y=%d\n", diff_x, diff_y));
+    if (((diff_x < 0) && ((int)s->visible_world.left + diff_x >= 0)) ||
+        ((diff_x > 0) && (s->visible_world.right + diff_x <= s->world.size.width))) {
+        s->visible_world.left += diff_x;
+        s->visible_world.right += diff_x;
+    }
+    if (((diff_y < 0) && ((int)s->visible_world.top + diff_y >= 0)) ||
+        ((diff_y > 0) && (s->visible_world.bottom + diff_y <= s->world.size.height))) {
+        s->visible_world.top += diff_y;
+        s->visible_world.bottom += diff_y;
+    }
+    LOG(("visible_world: (%u,%u,%u,%u)\n", s->visible_world.left, s->visible_world.right, s->visible_world.top, s->visible_world.bottom));
 }
 
 
@@ -279,7 +297,7 @@ void update_screen(State *s)
 {
     char *title = "CONWAY'S GAME OF LIFE";
     char *footer = "q: quit";
-    uint i, j, m, n, t, l, b, r, w, h, x, y, o;
+    uint i, j, m, n, t, l, b, r, w, h, ww, wh, x, y, o;
     uint row_buf_size;
     char *sc = (char*) s->screen.cells;
     uint *wd = (uint*) s->world.cells;
@@ -290,9 +308,11 @@ void update_screen(State *s)
     r = s->display_area.right;
     w = s->screen.size.width;
     h = s->screen.size.height;
+    ww = s->world.size.width;
+    wh = s->world.size.height;
     x = s->visible_world.left;
     y = s->visible_world.top;
-    row_buf_size = get_row_buf_size(s->world.size.width, 1);
+    row_buf_size = get_row_buf_size(ww, 1);
 
     /* fill screen with spaces */
     for (i = 0; i < h; i++) {
@@ -312,14 +332,34 @@ void update_screen(State *s)
 
     /* draw frame */
     for (i = t - 1, j = l - 1; j <= r; j++) {
-        sc[i * w + j] = C_FRAME;
+        if ((j == (l + r) / 2) && (y > 0)) {
+            sc[i * w + j] = 'w';
+        }
+        else {
+            sc[i * w + j] = C_FRAME;
+        }
     }
     for (++i; i < b; i++) {
-        sc[i * w + l - 1] = C_FRAME;
-        sc[i * w + r] = C_FRAME;
+        if ((i == (t + b) / 2) && (x > 0)) {
+            sc[i * w + l - 1] = 'a';
+        }
+        else {
+            sc[i * w + l - 1] = C_FRAME;
+        }
+        if ((i == (t + b) / 2) && (x + (r - l) / 2 < ww)) {
+            sc[i * w + r] = 'd';
+        }
+        else {
+            sc[i * w + r] = C_FRAME;
+        }
     }
     for (j = l - 1; j <= r; j++) {
-        sc[i * w + j] = C_FRAME;
+        if ((j == (l + r) / 2) && (y + (b - t) < wh)) {
+            sc[i * w + j] = 's';
+        }
+        else {
+            sc[i * w + j] = C_FRAME;
+        }
     }
 
     /* draw world */
@@ -458,6 +498,18 @@ void handle_events(State *s)
         LOG(("Key pressed %c\n", key));
         if (key == 'q' || key == 'Q') {
             s->running = FALSE;
+        }
+        else if (key == 'd') {
+            scroll_screen(s, 1, 0);
+        }
+        else if (key == 'a') {
+            scroll_screen(s, -1, 0);
+        }
+        else if (key == 'w') {
+            scroll_screen(s, 0, -1);
+        }
+        else if (key == 's') {
+            scroll_screen(s, 0, 1);
         }
     }
 }

@@ -72,6 +72,8 @@ typedef struct {
     Board screen;
     Rect2D visible_world;
     Rect2D display_area;
+    uint it;
+    float fps;
     BOOL running;
 } State;
 
@@ -108,7 +110,7 @@ char io_get_key(void)
     fd_set fds;
     /* Set up the timeout */
     tv.tv_sec = 0;
-    tv.tv_usec = 50000;
+    tv.tv_usec = 1000;
 
     /* Zero out the fd_set - make sure it's pristine */
     FD_ZERO(&fds);
@@ -296,7 +298,8 @@ void show_cursor(BOOL show)
 void update_screen(State *s)
 {
     char *title = "CONWAY'S GAME OF LIFE";
-    char *footer = "q: quit";
+    char left_footer[30];
+    char *right_footer = "q: quit";
     uint i, j, m, n, t, l, b, r, w, h, ww, wh, x, y, o;
     uint row_buf_size;
     char *sc = (char*) s->screen.cells;
@@ -369,14 +372,20 @@ void update_screen(State *s)
             o = m * row_buf_size + n / BITS_PER_UINT;
             if ((wd[o] >> (n % BITS_PER_UINT)) & 0x1) {
                 sc[i * w + j] = C_BLACK;
-                sc[i * w + j + 1] = C_BLACK;
+                if (j + 1 < r) {  /* avoid overwriting right frame */
+                    sc[i * w + j + 1] = C_BLACK;
+                }
             }
         }
     }
 
     /* draw footer */
-    if (strlen(footer) < w) {
-        sprintf(&sc[(h - 1) * w + w - strlen(footer)], "%s", footer);
+    if (15 < w) {
+        sprintf(left_footer, "%6u|%2.1ffps", s->it, s->fps);
+        memcpy(&sc[(h - 1) * w], left_footer, strlen(left_footer));
+    }
+    if (strlen(right_footer) < w) {
+        memcpy(&sc[(h - 1) * w + w - strlen(right_footer)], right_footer, strlen(right_footer));
     }
 }
 
@@ -515,21 +524,39 @@ void handle_events(State *s)
 }
 
 
+uint get_frame_time(struct timeval *start_tv)
+{
+    struct timeval end_tv;
+    uint t;
+    gettimeofday(&end_tv, NULL);
+    t = (end_tv.tv_sec - start_tv->tv_sec) * 1e6 + (end_tv.tv_usec - start_tv->tv_usec);
+    *start_tv = end_tv;
+    return t;
+}
+
+
 void main_loop(State s)
 {
-    uint frame_delay = 50;  /* msec */
+    struct timeval start_tv;
+    uint t, frame_delay = 1;  /* msec */
     s.running = TRUE;
+    s.it = 0;
 
     init_world(&s);
     init_display_areas(&s);
+    gettimeofday(&start_tv, NULL);
 
     while (s.running) {
         update_screen(&s);
         render_screen(s.screen);
         update_world(&s);
         handle_events(&s);
-        /* TODO compute frame_delay each frame to ensure same FPS */
-        usleep(frame_delay * 1000);
+        t = get_frame_time(&start_tv);
+        s.fps = (float)1e6 / t;
+        if (t < frame_delay * 1000) {
+            usleep(frame_delay * 1000 - t);
+        }
+        s.it++;
     }
 }
 

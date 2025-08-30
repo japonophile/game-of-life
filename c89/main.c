@@ -33,6 +33,8 @@ typedef int BOOL;
 #define MAX_BOARD_WIDTH 1024
 #define MAX_BOARD_HEIGHT 1024
 
+#define KEY_TIMEOUT_US 1000
+
 typedef enum {
     C_BLANK,
     C_FRAME,
@@ -73,7 +75,9 @@ typedef struct {
     Rect2D visible_world;
     Rect2D display_area;
     uint it;
+    float target_fps;
     float fps;
+    float max_fps;
     BOOL running;
 } State;
 
@@ -110,7 +114,7 @@ char io_get_key(void)
     fd_set fds;
     /* Set up the timeout */
     tv.tv_sec = 0;
-    tv.tv_usec = 1000;
+    tv.tv_usec = KEY_TIMEOUT_US;
 
     /* Zero out the fd_set - make sure it's pristine */
     FD_ZERO(&fds);
@@ -223,9 +227,9 @@ void init_world(State *s)
     h = s->world.size.height;
     row_buf_size = get_row_buf_size(w, 1);
 
-    wd[(h / 2 - 1) * row_buf_size] = 2 << (w / 2 - 1);
-    wd[(h / 2) * row_buf_size] = 7 << (w / 2 - 1);
-    wd[(h / 2 + 1) * row_buf_size] = 1 << (w / 2 - 1);
+    wd[(h / 2 - 1) * row_buf_size + row_buf_size / 2 - 1] = 2 << (BITS_PER_UINT / 2);
+    wd[(h / 2) * row_buf_size + row_buf_size / 2 - 1] = 7 << (BITS_PER_UINT / 2);
+    wd[(h / 2 + 1) * row_buf_size + row_buf_size / 2 - 1] = 1 << (BITS_PER_UINT / 2);
 }
 
 
@@ -298,7 +302,7 @@ void show_cursor(BOOL show)
 void update_screen(State *s)
 {
     char *title = "CONWAY'S GAME OF LIFE";
-    char left_footer[30];
+    char left_footer[40];
     char *right_footer = "q: quit";
     uint i, j, m, n, t, l, b, r, w, h, ww, wh, x, y, o;
     uint row_buf_size;
@@ -380,8 +384,8 @@ void update_screen(State *s)
     }
 
     /* draw footer */
-    if (15 < w) {
-        sprintf(left_footer, "%6u|%2.1ffps", s->it, s->fps);
+    if (36 < w) {
+        sprintf(left_footer, "%6u|%3.1ffps(max:%3.1f)", s->it, s->fps, s->max_fps);
         memcpy(&sc[(h - 1) * w], left_footer, strlen(left_footer));
     }
     if (strlen(right_footer) < w) {
@@ -498,6 +502,14 @@ void update_world(State *s)
 }
 
 
+void update_target_fps(State *s, float scale) {
+    float new_fps = s->target_fps * scale;
+    if (new_fps >= 1.0 && new_fps < 500.0) {
+        s->target_fps = new_fps;
+    }
+}
+
+
 void handle_events(State *s)
 {
     char key;
@@ -520,17 +532,22 @@ void handle_events(State *s)
         else if (key == 's') {
             scroll_screen(s, 0, 1);
         }
+        else if (key == '+') {
+            update_target_fps(s, 2.0);
+        }
+        else if (key == '-') {
+            update_target_fps(s, 0.5);
+        }
     }
 }
 
 
-uint get_frame_time(struct timeval *start_tv)
+uint get_frame_time(struct timeval start_tv)
 {
     struct timeval end_tv;
     uint t;
     gettimeofday(&end_tv, NULL);
-    t = (end_tv.tv_sec - start_tv->tv_sec) * 1e6 + (end_tv.tv_usec - start_tv->tv_usec);
-    *start_tv = end_tv;
+    t = (end_tv.tv_sec - start_tv.tv_sec) * 1e6 + (end_tv.tv_usec - start_tv.tv_usec);
     return t;
 }
 
@@ -538,24 +555,30 @@ uint get_frame_time(struct timeval *start_tv)
 void main_loop(State s)
 {
     struct timeval start_tv;
-    uint t, frame_delay = 1;  /* msec */
+    uint t, d;
     s.running = TRUE;
     s.it = 0;
+    s.fps = 0;
+    s.max_fps = 0;
+    s.target_fps = 2;
 
     init_world(&s);
     init_display_areas(&s);
-    gettimeofday(&start_tv, NULL);
 
     while (s.running) {
+        gettimeofday(&start_tv, NULL);
         update_screen(&s);
         render_screen(s.screen);
         update_world(&s);
         handle_events(&s);
-        t = get_frame_time(&start_tv);
-        s.fps = (float)1e6 / t;
-        if (t < frame_delay * 1000) {
-            usleep(frame_delay * 1000 - t);
+        t = get_frame_time(start_tv);
+        s.max_fps = (float)1e6 / t;
+        d = 1e6 / s.target_fps - KEY_TIMEOUT_US;
+        if (t < d) {
+            usleep(d - t);
         }
+        t = get_frame_time(start_tv);
+        s.fps = (float)1e6 / t;
         s.it++;
     }
 }
